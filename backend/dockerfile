@@ -1,0 +1,39 @@
+# --- Builder Stage --- (Optional, only if you have build steps)
+FROM php:7.4-fpm-alpine as builder
+
+WORKDIR /app
+
+# Install composer if you're using it for dependencies
+RUN apk add --no-cache composer
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
+
+COPY . .
+
+# Run any build commands if your application requires them (e.g., npm build)
+
+# --- Final Stage ---
+FROM php:7.4-apache-alpine
+
+WORKDIR /var/www/html
+
+# Copy application code from the builder stage
+COPY --from=builder /app .
+
+# Install PHP extensions and libraries.  Use the corrected RUN command:
+RUN apt-get update && apt-get install -y \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd \
+    && docker-php-ext-install pdo_mysql \
+    && docker-php-ext-install mysqli \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Expose the port
+EXPOSE 80
+
+# Start Apache
+CMD ["apache2-foreground"]
